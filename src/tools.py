@@ -13,6 +13,19 @@ from qdrant_client import QdrantClient, models
 from langchain_core.tools import tool, BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_function
 
+__all__ = [
+    "add_to_memory",
+    "retrieve_from_memory",
+    "create_note",
+    "read_notes",
+    "delete_note",
+    "update_note",
+    "create_tool",
+    "all_available_tools",
+    "add_tools_to_context",
+    "basetools_to_jsons",
+]
+
 
 def basetools_to_jsons(tools: list[BaseTool]):
     return [
@@ -617,3 +630,25 @@ def add_tools_to_context(tool_names: list[str]) -> list[BaseTool]:
             )
 
     return ALL_BASE_TOOLS + loaded_tools
+
+
+def load_base_tools() -> list[BaseTool]:
+    """Load and return all base tool instances.
+
+    This function returns a list of all predefined base tool instances
+    available in the system.
+
+    Returns:
+        A list of BaseTool instances representing all base tools.
+    """
+    return [
+        add_to_memory,
+        add_tools_to_context,
+        all_available_tools,
+        create_note,
+        create_tool,
+        delete_note,
+        read_notes,
+        retrieve_from_memory,
+        update_note,
+    ]
