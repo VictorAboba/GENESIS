@@ -1,0 +1,30 @@
+name: autonomous_agent
+
+services:
+
+  doc_worker_app:
+    image: autonomous_agent:latest
+    container_name: autonomous_agent_container
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    working_dir: /app
+    environment:
+      - GIT_NAME=victoraboba
+      - GIT_EMAIL=kuzminoff.victor@gmail.com
+      - DEBUG=true
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              count: "all"
+              capabilities: [gpu]
+        limits:
+          cpus: "9.6"
+          memory: 25.2gb
+        
+    restart: unless-stopped

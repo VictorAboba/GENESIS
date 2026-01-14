@@ -1,3 +1,4 @@
+dotenv
 langchain_core
 openai
 qdrant-client[fastembed]
