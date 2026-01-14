@@ -8,6 +8,7 @@ import json
 from pydantic import BaseModel
 from typing import Literal
 import importlib.util
+import os
 
 from qdrant_client import QdrantClient, models
 from langchain_core.tools import tool, BaseTool
@@ -21,6 +22,7 @@ __all__ = [
     "delete_note",
     "update_note",
     "create_tool",
+    "delete_tools",
     "all_available_tools",
     "add_tools_to_context",
     "basetools_to_jsons",
@@ -494,6 +496,10 @@ def create_tool(source: str, tool_name: str) -> str:
     in the created_tools directory, and registers it in the tool_registry.json file.
     The function automatically extracts description from the source code's docstring.
 
+    The source code should be formatted as follows:
+    1. List of imports at the beginning
+    2. Function definition wrapped with @tool(parse_docstring=True) decorator from langchain_core module
+
     Args:
         source: The Python source code for the tool as a string
         tool_name: The name to assign to the new tool (must be unique)
@@ -562,6 +568,177 @@ def create_tool(source: str, tool_name: str) -> str:
 
 
 @tool(parse_docstring=True)
+def delete_tools(tool_names: list[str], dry_run: bool = False) -> str:
+    """Securely delete tools from the registry and filesystem with atomic operations.
+
+    This function safely removes tools from both the tool registry and their corresponding
+    source files. It implements security measures to prevent path traversal attacks,
+    validates input, and provides atomic operations with proper rollback mechanisms.
+
+    Args:
+        tool_names: List of tool names to delete (must be alphanumeric + underscores)
+        dry_run: If True, only validates and reports what would be deleted without
+                actually performing the deletion (default: False)
+
+    Returns:
+        A detailed status report showing successful deletions and any errors encountered
+
+    Raises:
+        ValueError: If tool_names is empty, contains invalid names, or other validation errors
+        IOError: If there are file system errors during operations
+        RuntimeError: For unexpected errors during the deletion process
+    """
+    if not tool_names:
+        raise ValueError("Tool names list cannot be empty")
+
+    if len(tool_names) > 50:
+        raise ValueError("Cannot delete more than 50 tools at once")
+
+    valid_tool_name_pattern = re.compile(r"^[a-zA-Z0-9_]+$")
+    for name in tool_names:
+        if not isinstance(name, str):
+            raise ValueError(f"Tool name must be a string, got {type(name)}")
+        if not name.strip():
+            raise ValueError("Tool name cannot be empty")
+        if not valid_tool_name_pattern.match(name):
+            raise ValueError(
+                f"Invalid tool name '{name}'. Must contain only alphanumeric characters and underscores"
+            )
+
+    path_to_tool_registry = Path("src/tool_registry.json")
+    path_to_tool_sources = Path("src/created_tools").resolve()
+
+    try:
+        with open(path_to_tool_registry, "r", encoding="utf-8") as file:
+            tools = json.load(file)
+    except FileNotFoundError:
+        tools = {}
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON format in tool registry: {str(e)}")
+    except (IOError, OSError) as e:
+        raise IOError(f"File system error reading tool registry: {str(e)}")
+
+    operations = []
+    successful_deletions = []
+    failed_operations = []
+
+    try:
+        for name in tool_names:
+            try:
+                if name not in tools:
+                    raise ValueError(f"Tool '{name}' not found in registry")
+
+                checkpoint = tools[name].copy()
+
+                source_file_name = f"{name}.py"
+                path_to_source_file = (
+                    path_to_tool_sources / source_file_name
+                ).resolve()
+
+                if not str(path_to_source_file).startswith(
+                    str(path_to_tool_sources) + os.sep
+                ):
+                    raise ValueError(
+                        f"Invalid file path for tool '{name}' - potential security violation"
+                    )
+
+                file_exists = path_to_source_file.exists()
+
+                if dry_run:
+                    operations.append(
+                        {
+                            "name": name,
+                            "status": "dry_run",
+                            "message": f"Would delete tool '{name}' and file '{source_file_name}'",
+                        }
+                    )
+                    continue
+
+                del tools[name]
+
+                if file_exists:
+                    try:
+                        os.remove(path_to_source_file)
+                    except (IOError, OSError) as e:
+                        tools[name] = checkpoint
+                        raise IOError(
+                            f"Failed to delete file '{source_file_name}': {str(e)}"
+                        )
+
+                operations.append(
+                    {
+                        "name": name,
+                        "status": "success",
+                        "message": f"Successfully deleted tool '{name}' and file '{source_file_name}'",
+                    }
+                )
+                successful_deletions.append(name)
+
+            except ValueError as e:
+                operations.append(
+                    {
+                        "name": name,
+                        "status": "validation_error",
+                        "message": f"Validation error for tool '{name}': {str(e)}",
+                    }
+                )
+                failed_operations.append(name)
+
+            except (IOError, OSError) as e:
+                operations.append(
+                    {
+                        "name": name,
+                        "status": "file_error",
+                        "message": f"File system error for tool '{name}': {str(e)}",
+                    }
+                )
+                failed_operations.append(name)
+
+            except Exception as e:
+                operations.append(
+                    {
+                        "name": name,
+                        "status": "unexpected_error",
+                        "message": f"Unexpected error for tool '{name}': {str(e)}",
+                    }
+                )
+                failed_operations.append(name)
+
+        if not dry_run and successful_deletions:
+            try:
+                with open(path_to_tool_registry, "w", encoding="utf-8") as file:
+                    json.dump(tools, file, indent=2)
+            except (IOError, OSError) as e:
+                raise IOError(f"Failed to update tool registry: {str(e)}")
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Failed to serialize tool registry: {str(e)}")
+
+        report_lines = []
+
+        if dry_run:
+            report_lines.append(f"DRY RUN MODE - Would delete {len(operations)} tools:")
+        else:
+            report_lines.append(f"Deletion operation completed:")
+            report_lines.append(
+                f"- Successfully deleted: {len(successful_deletions)} tools"
+            )
+            report_lines.append(f"- Failed operations: {len(failed_operations)} tools")
+
+        for op in operations:
+            status_icon = (
+                "✓"
+                if op["status"] == "success"
+                else "✗" if op["status"] != "dry_run" else "~"
+            )
+            report_lines.append(f"{status_icon} {op['name']}: {op['message']}")
+
+        return "\n".join(report_lines)
+
+    except Exception as e:
+        raise RuntimeError(f"Critical error during tool deletion process: {str(e)}")
+
+
+@tool(parse_docstring=True)
 def all_available_tools():
     path_to_tool_registry = Path("src/tool_registry.json")
     try:
@@ -582,7 +759,7 @@ def add_tools_to_context(tool_names: list[str]) -> list[BaseTool]:
     """Load and return tool instances based on their names from the tool registry.
 
     This function reads the tool registry to find the source paths of the specified
-    tools, dynamically imports them, and returns a list of tool instances.
+    tools, dynamically imports them, and returns a list of tool instances that will be added to your context on the next step.
 
     Args:
         tool_names: A list of tool names to load
