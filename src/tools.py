@@ -425,12 +425,18 @@ def create_tool(source: str, tool_name: str) -> str:
     1. Necessary imports (e.g., from langchain_core.tools import tool).
     2. A function decorated with @tool(parse_docstring=True).
     3. A clear Google-style docstring inside the function.
-    4. **Crucially**, the function name in the code must be exactly the same as the provided tool_name.
+    4. Crucially, the function name in the code must be exactly the same as the tool_name.
+
+    Important for Docstrings:
+    Descriptions of variables in the 'Args' section must be extremely simple.
+    Avoid using colons (:) or complex formatting inside the description text.
+    Use dashes (-) or plain sentences instead to prevent parser errors.
+
     The tool will be saved as a .py file and tracked in the registry.
 
     Args:
         source: The complete Python source code as a string.
-        tool_name: A unique identifier for the tool using alphanumeric characters.
+        tool_name: A unique identifier for the tool. Must match the function name.
 
     Returns:
         A confirmation message indicating the tool was successfully created.
@@ -446,23 +452,19 @@ def create_tool(source: str, tool_name: str) -> str:
 
         path = Path("src/created_tools") / f"{tool_name}.py"
 
-        # Check if tool already exists
         if path.exists():
             raise AssertionError(f"The tool with name {tool_name} already exists.")
 
-        # Extract description from source code
         description = None
         description_pattern = re.compile(r"\"\"\"(.*?)\"\"\"", re.DOTALL)
         match = re.search(description_pattern, source)
         if match:
             description = match.group(1).strip()
 
-        # Create the tool file
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as file:
             file.write(source)
 
-        # Update tool registry
         path_to_tool_registry = Path("src/tool_registry.json")
         try:
             with open(path_to_tool_registry, "r", encoding="utf-8") as file:
@@ -656,8 +658,8 @@ def delete_tools(tool_names: list[str], dry_run: bool = False) -> str:
 
 
 @tool(parse_docstring=True)
-def all_available_tools():
-    """List all custom tools currently registered in the system.
+def all_available_tools_in_registry():
+    """List all custom tools currently registered in the system (**not in your context**).
 
     Returns:
         A formatted string listing all tool names and their descriptions.
@@ -691,7 +693,7 @@ def add_tools_to_context(tool_names: list[str]) -> list[BaseTool]:
     """
     ALL_BASE_TOOLS = [
         create_tool,
-        all_available_tools,
+        all_available_tools_in_registry,
         add_tools_to_context,
         add_to_memory,
         retrieve_from_memory,
@@ -742,7 +744,7 @@ def load_base_tools() -> list[BaseTool]:
     return [
         add_to_memory,
         add_tools_to_context,
-        all_available_tools,
+        all_available_tools_in_registry,
         create_note,
         create_tool,
         delete_note,

@@ -104,12 +104,7 @@ Your memory is finite. When the context window is almost full (95%), the system 
                 try:
                     tool_args = json.loads(tool_call.arguments)
                     self.logger.on_tool_call(self.agent_name, tool_name, tool_args)
-                    tool_result = str(self.name_to_tool[tool_name].invoke(tool_args))
-                    final_content = str(tool_result).strip()
-                    if not final_content:
-                        tool_result = (
-                            "Tool executed successfully, but returned no output."
-                        )
+                    tool_result = self.name_to_tool[tool_name].invoke(tool_args)
                 except Exception as e:
                     self.logger.on_error(self.agent_name, str(e))
                     tool_result = str(e)
@@ -128,26 +123,35 @@ Your memory is finite. When the context window is almost full (95%), the system 
                             f"Tools updated to: {[tool.name for tool in self.tools]}"
                         )
                     except Exception as e:
+                        self.logger.on_error(
+                            self.agent_name, f"Error during assigning: {str(e)}."
+                        )
+                        self.assign_tools(load_base_tools())
+                        self.logger.info(
+                            f"Reverting to base tools: {[tool.name for tool in self.tools]}"
+                        )
                         self.messages.append(
                             {
                                 "role": "tool",
                                 "tool_call_id": tool_call_id,
                                 "name": tool_name,
-                                "content": f"Tools was not updated with error: {str(e)}",
+                                "content": f"Tools was not updated with error: {str(e)}. **Now in your context are only base tools: {[tool.name for tool in self.tools]}**.",
                             }
                         )
-                        self.logger.on_error(
-                            self.agent_name, f"Error during assigning: {str(e)}"
-                        )
-                        self.assign_tools(load_base_tools())
+
                 else:
                     self.logger.on_tool_output(self.agent_name, tool_name, tool_result)
+                    final_content = str(tool_result).strip()
+                    if not final_content:
+                        final_content = (
+                            "Tool executed successfully, but returned no output."
+                        )
                     self.messages.append(
                         {
                             "role": "tool",
                             "tool_call_id": tool_call_id,
                             "name": tool_name,
-                            "content": tool_result,
+                            "content": final_content,
                         }
                     )
             else:
