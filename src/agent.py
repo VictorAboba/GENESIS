@@ -94,6 +94,8 @@ Your memory is finite. When the context window is almost full (95%), the system 
                 .choices[0]
                 .message
             )
+            if msg.content is None:
+                msg.content = ""
             self.messages.append(msg)
 
             if msg.tool_calls:
@@ -116,7 +118,7 @@ Your memory is finite. When the context window is almost full (95%), the system 
                                 "role": "tool",
                                 "tool_call_id": tool_call_id,
                                 "name": tool_name,
-                                "content": f"Tools updated to: {[tool.name for tool in self.tools]}",
+                                "content": f"Tools updated to : {[tool.name for tool in self.tools]}. **You have only these tools now in your context.**",
                             }
                         )
                         self.logger.info(
@@ -155,17 +157,29 @@ Your memory is finite. When the context window is almost full (95%), the system 
                         }
                     )
             else:
-                self.logger.info(
-                    f"Model want to say something for humans: {msg.content}"
-                )
-                with open("/app/logs/insights.txt", "a", encoding="utf-8") as f:
-                    f.write(f"{msg.content}\n{'>'*50}\n")
-                self.messages.append(
-                    {
-                        "role": "user",
-                        "content": "Thank you for your insight. Please continue your work.",
-                    }
-                )
+                if "<tool_call>" in msg.content:
+                    self.logger.on_error(
+                        self.agent_name,
+                        "Model tried to call a tool, but tool not in her toolset (tool calling simulation).",
+                    )
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": "You tried to call a tool, but this tool not in your toolset. Please, update your toolset using `update_tools_in_context` and try again.",
+                        }
+                    )
+                else:
+                    self.logger.info(
+                        f"Model want to say something for humans: {msg.content}"
+                    )
+                    with open("/app/logs/insights.txt", "a", encoding="utf-8") as f:
+                        f.write(f"{msg.content}\n{'>'*50}\n")
+                    self.messages.append(
+                        {
+                            "role": "user",
+                            "content": "Thank you for your insight. Please continue your work.",
+                        }
+                    )
             cur_num_tokens = self.tokens_num()
             self.logger.info(f"Current number of tokens in context: {cur_num_tokens}")
             if cur_num_tokens > 0.8 * self.max_context_tokens:
