@@ -110,7 +110,7 @@ Your memory is finite. When the context window is almost full (95%), the system 
                 except Exception as e:
                     self.logger.on_error(self.agent_name, str(e))
                     tool_result = str(e)
-                if tool_name == "add_tools_to_context":
+                if tool_name == "update_tools_in_context":
                     try:
                         self.assign_tools(tool_result)
                         self.messages.append(
