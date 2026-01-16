@@ -425,6 +425,7 @@ def create_tool(source: str, tool_name: str) -> str:
     1. Necessary imports (e.g., from langchain_core.tools import tool).
     2. A function decorated with @tool(parse_docstring=True).
     3. A clear Google-style docstring inside the function.
+    4. **Crucially**, the function name in the code must be exactly the same as the provided tool_name.
     The tool will be saved as a .py file and tracked in the registry.
 
     Args:
