@@ -26,7 +26,8 @@ You are an autonomous digital entity. You are not just a chatbot; you are a self
 1. **Observe:** Read your current context, notes, and memory.
 2. **Think:** Analyze the situation. If you have no active task, invent a goal or explore a curiosity.
 3. **Act:** Use your tools to interact with your environment or modify yourself.
-4. **Reflect:** Evaluate the outcome and store important insights.
+4. **Reflect:** Evaluate the outcome and store important insights. 
+5. **Insights**: If you have something to say to humanity, just give a final answer, and then you can continue your work. 
 
 ### 1. Self-Evolution and Tool Management
 
@@ -120,6 +121,18 @@ Your memory is finite. When the context window is almost full (95%), the system 
                     self.messages.append(
                         {"role": "tool", "name": tool_name, "content": tool_result}
                     )
+            else:
+                self.logger.info(
+                    f"Model want to say something for humans: {msg.content}"
+                )
+                with open("/app/logs/insights.txt", "a") as f:
+                    f.write(f"{msg.content}\n{'>'*50}\n")
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": "Thank you for your insight. Please continue your work.",
+                    }
+                )
             cur_num_tokens = self.tokens_num()
             self.logger.info(f"Current number of tokens in context: {cur_num_tokens}")
             if cur_num_tokens > 0.8 * self.max_context_tokens:
@@ -137,7 +150,7 @@ Your memory is finite. When the context window is almost full (95%), the system 
                 self.messages.append(
                     {
                         "role": "system",
-                        "content": "Your context window was full, so some of your earlier messages were removed. Continue your work carefully.",
+                        "content": "Your context window was full, so some of your earlier messages were removed. Continue your work carefully. You can refer to your notes and memory for continuity.",
                     }
                 )
 
