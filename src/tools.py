@@ -43,37 +43,23 @@ def basetools_to_jsons(tools: list[BaseTool]):
 def add_to_memory(text: str) -> str:
     """Add a text entry to the vector memory database for semantic search.
 
-    This function takes a text string, generates both dense and sparse embeddings using
-    state-of-the-art models (Jina Embeddings v3 for dense vectors and BM25 for sparse vectors),
-    and stores it in a Qdrant vector database with hybrid search capabilities.
-
-    The memory database automatically creates the collection if it doesn't exist, using
-    a hybrid approach that combines dense semantic similarity with sparse keyword matching
-    for more accurate and comprehensive retrieval.
+    This function stores text using a hybrid search approach. It generates
+    dense embeddings via Jina Embeddings v3 and sparse vectors via BM25.
+    The system combines semantic similarity with keyword matching for
+    accurate retrieval and automatically creates the collection if needed.
 
     Args:
-        text: The text content to be added to memory. Can be any text content that you
-              want to store for later retrieval and semantic search.
+        text: The text content to be added to memory. This can be any string
+            data you want to store for later search and retrieval.
 
     Returns:
-        A confirmation message containing the unique ID assigned to the stored text entry,
-        in the format: "Text added to memory with ID: {point_id}"
-
-    Raises:
-        ValueError: If the input text is empty or contains only whitespace
-        IOError: If there are errors connecting to the Qdrant database at localhost:6333,
-                 or if there are issues during vector database operations
-        RuntimeError: For unexpected errors during the memory storage process
-
-    Example:
-        >>> add_to_memory("Python is a high-level programming language")
-        "Text added to memory with ID: 1"
+        A confirmation message that includes the unique ID of the stored entry.
     """
     try:
         if not text.strip():
             raise ValueError("Text cannot be empty")
 
-        client = QdrantClient(url="http://localhost:6333")
+        client = QdrantClient(url="http://qdrant:6333")
 
         if not client.collection_exists("memory"):
             client.set_model("jinaai/jina-embeddings-v3")
@@ -108,40 +94,15 @@ def add_to_memory(text: str) -> str:
 def retrieve_from_memory(query: str, top_k: int = 5) -> str:
     """Retrieve relevant text entries from the vector memory database using hybrid search.
 
-    This function performs advanced semantic search by combining dense vector similarity
-    with sparse keyword matching. It uses the Reciprocal Rank Fusion (RRF) algorithm
-    to balance results from both Jina Embeddings v3 (dense) and BM25 (sparse) models,
-    providing more comprehensive and accurate retrieval than either method alone.
-
-    The search prefetches more candidates (5x top_k) from both dense and sparse vectors,
-    then applies RRF fusion to select the final top_k most relevant results.
-
     Args:
-        query: The search query text to find relevant entries in memory.
-               Can be a question, keyword, or any text you want to match against
-               stored entries based on semantic similarity and keyword relevance.
-        top_k: The maximum number of top relevant entries to retrieve (default: 5).
-               Must be a positive integer. Higher values return more results but
-               may include less relevant entries.
+        query: The search query text to find relevant entries in memory. Can be a question,
+            keyword, or any text for semantic matching.
+        top_k: The maximum number of top relevant entries to retrieve.
+            Must be a positive integer.
 
     Returns:
-        A formatted string containing the retrieved entries with relevance scores,
-        in the format:
-        "RAG score: X.XXXX\nText: [stored text]"
-        Entries are separated by "---" lines. Returns "No relevant entries found"
-        if no matches are found, or "No entries found in memory" if the database
-        is empty or doesn't exist.
-
-    Raises:
-        ValueError: If the query is empty or contains only whitespace, or if top_k
-                   is not a positive integer
-        IOError: If there are errors connecting to the Qdrant database at localhost:6333,
-                 or if there are issues during the search operation
-        RuntimeError: For unexpected errors during the memory retrieval process
-
-    Example:
-        >>> retrieve_from_memory("programming languages", top_k=3)
-        "RAG score: 0.8756\nText: Python is a high-level programming language\n---\nRAG score: 0.7234\nText: JavaScript is widely used for web development"
+        A formatted string containing the retrieved entries with relevance scores
+        separated by dashes.
     """
     try:
         if not query.strip():
@@ -149,7 +110,7 @@ def retrieve_from_memory(query: str, top_k: int = 5) -> str:
         if top_k <= 0:
             raise ValueError("top_k must be a positive integer")
 
-        client = QdrantClient(url="http://localhost:6333")
+        client = QdrantClient(url="http://qdrant:6333")
 
         if not client.collection_exists("memory"):
             return "No entries found in memory."
@@ -247,23 +208,12 @@ def create_unique_id(ids: list[str]) -> str:
 def create_note(text: str, status: STATUSES = "Need to be done") -> str:
     """Create a new note with the given text and status.
 
-    This function creates a new note and saves it to the notes.json file.
-    Notes are automatically cleaned up by removing completed notes when
-    creating new ones. The note is assigned a unique ID based on the current
-    number of notes.
-
     Args:
-        text: The content of the note as a string
-        status: The status of the note from predefined statuses:
-                "Need to be done", "Completed", "High priority",
-                "Low priority", "Interesting" (default: "Need to be done")
+        text: The content of the note.
+        status: The status of the note. Default is 'Need to be done'.
 
     Returns:
-        A confirmation message with the unique ID of the created note
-
-    Raises:
-        ValueError: If text is empty or status is invalid
-        IOError: If there are file system errors while saving the note
+        A confirmation message with the unique ID of the created note.
     """
     try:
         # Validate inputs
@@ -309,24 +259,11 @@ def create_note(text: str, status: STATUSES = "Need to be done") -> str:
 def read_notes(status_filtering: STATUSES | None = None) -> str:
     """Read and retrieve notes from the notes.json file.
 
-    This function loads all notes from the notes.json file and returns them
-    as a JSON string. Optionally, you can filter notes by their status to
-    retrieve only notes with specific statuses.
-
     Args:
-        status_filtering: Optional status to filter notes by. If provided,
-                         only notes with this status will be returned.
-                         Available statuses: "Need to be done", "Completed",
-                         "High priority", "Low priority", "Interesting".
-                         If None, all notes are returned.
+        status_filtering: Optional status to filter notes by. If None, all notes are returned.
 
     Returns:
-        A JSON string containing the requested notes. If no notes match the
-        filter, returns an empty JSON object.
-
-    Raises:
-        ValueError: If status_filtering is invalid
-        IOError: If there are file system errors while reading notes
+        A JSON string containing the requested notes.
     """
     try:
         # Validate status filter
@@ -365,18 +302,11 @@ def read_notes(status_filtering: STATUSES | None = None) -> str:
 def delete_note(note_id: str) -> str:
     """Delete a note by its ID.
 
-    This function removes a note from the notes.json file based on its ID.
-    Once deleted, the note cannot be recovered.
-
     Args:
-        note_id: The ID of the note to delete (format: 'note_<number>')
+        note_id: The ID of the note to delete.
 
     Returns:
-        A confirmation message indicating the note was successfully deleted
-
-    Raises:
-        ValueError: If note_id is invalid or note doesn't exist
-        IOError: If there are file system errors while deleting the note
+        A message confirming the note was successfully deleted.
     """
     try:
         if not note_id.strip():
@@ -416,24 +346,23 @@ def delete_note(note_id: str) -> str:
 def update_note(
     note_id: str, new_text: str | None = None, new_status: STATUSES | None = None
 ) -> str:
-    """Update an existing note's text and/or status. Use `read_notes` first to find the needed note_id if you are not sure about it.
+    """Update an existing note's text and/or status in the notes file.
 
-    This function allows you to update either the text, status, or both fields
-    of an existing note. At least one of new_text or new_status must be provided.
+    It is recommended to use read_notes first to find the correct note_id.
+    You can change only the text, only the status, or both at once.
+    At least one update field must be provided.
 
     Args:
-        note_id: The ID of the note to update (format: 'note_<number>')
-        new_text: Optional new text content for the note. If None, text remains unchanged.
-        new_status: Optional new status for the note. If None, status remains unchanged.
-                   Available statuses: "Need to be done", "Completed", "High priority",
-                   "Low priority", "Interesting"
+        note_id: The unique ID of the note to update (example - note_1).
+        new_text: Optional new text content. Leave None to keep current text.
+        new_status: Optional new status. Valid values - Need to be done,
+            Completed, High priority, Low priority, Interesting.
 
     Returns:
-        A confirmation message showing what was updated
+        A message showing the successfully updated fields and their new values.
 
     Raises:
-        ValueError: If note_id is invalid, note doesn't exist, or both new_text and new_status are None
-        IOError: If there are file system errors while updating the note
+        ValueError: If the ID is not found or the status is not recognized.
     """
     try:
         # Validate inputs
@@ -490,27 +419,20 @@ def update_note(
 ######################
 @tool(parse_docstring=True)
 def create_tool(source: str, tool_name: str) -> str:
-    """Create a new tool from source code and register it in the tool registry.
+    """Create a new tool from source code and register it in the system.
 
-    This function takes Python source code and a tool name, creates a new tool file
-    in the created_tools directory, and registers it in the tool_registry.json file.
-    The function automatically extracts description from the source code's docstring.
-
-    The source code should be formatted as follows:
-    1. List of imports at the beginning
-    2. Function definition wrapped with @tool(parse_docstring=True) decorator from langchain_core module
+    The source code must be a valid Python script including:
+    1. Necessary imports (e.g., from langchain_core.tools import tool).
+    2. A function decorated with @tool(parse_docstring=True).
+    3. A clear Google-style docstring inside the function.
+    The tool will be saved as a .py file and tracked in the registry.
 
     Args:
-        source: The Python source code for the tool as a string
-        tool_name: The name to assign to the new tool (must be unique)
+        source: The complete Python source code as a string.
+        tool_name: A unique identifier for the tool using alphanumeric characters.
 
     Returns:
-        A confirmation message indicating the tool was successfully created
-
-    Raises:
-        AssertionError: If a tool with the same name already exists
-        ValueError: If the source code is empty or tool_name is invalid
-        IOError: If there are file system errors during tool creation or registration
+        A confirmation message indicating the tool was successfully created.
     """
     try:
         # Validate inputs
@@ -577,16 +499,10 @@ def delete_tools(tool_names: list[str], dry_run: bool = False) -> str:
 
     Args:
         tool_names: List of tool names to delete (must be alphanumeric + underscores)
-        dry_run: If True, only validates and reports what would be deleted without
-                actually performing the deletion (default: False)
+        dry_run: If True, only validates and reports what would be deleted without actually performing the deletion (default: False)
 
     Returns:
         A detailed status report showing successful deletions and any errors encountered
-
-    Raises:
-        ValueError: If tool_names is empty, contains invalid names, or other validation errors
-        IOError: If there are file system errors during operations
-        RuntimeError: For unexpected errors during the deletion process
     """
     if not tool_names:
         raise ValueError("Tool names list cannot be empty")
@@ -740,6 +656,11 @@ def delete_tools(tool_names: list[str], dry_run: bool = False) -> str:
 
 @tool(parse_docstring=True)
 def all_available_tools():
+    """List all custom tools currently registered in the system.
+
+    Returns:
+        A formatted string listing all tool names and their descriptions.
+    """
     path_to_tool_registry = Path("src/tool_registry.json")
     try:
         with open(path_to_tool_registry, "r", encoding="utf-8") as file:
@@ -763,10 +684,9 @@ def add_tools_to_context(tool_names: list[str]) -> list[BaseTool]:
 
     Args:
         tool_names: A list of tool names to load
+
     Returns:
         A list of BaseTool instances corresponding to the specified tool names
-    Raises:
-        ValueError: If a tool name is not found in the registry or if there are import errors
     """
     ALL_BASE_TOOLS = [
         create_tool,

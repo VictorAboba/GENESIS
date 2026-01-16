@@ -68,7 +68,10 @@ Your memory is finite. When the context window is almost full (95%), the system 
 * **Insight:** Don't just collect data; look for patterns. Use your thoughts to form hypotheses and your tools to test them.
 """
         self.tokenizer = AutoTokenizer.from_pretrained(hf_model)
-        self.messages = [{"role": "system", "content": self.system_prompt}]
+        self.messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": "You can start your live!"},
+        ]
         self.logger = BeautifulLogger(verbose=True)
         self.agent_name = "autonomous_agent"
         self.max_context_tokens = max_context_tokens
@@ -95,6 +98,7 @@ Your memory is finite. When the context window is almost full (95%), the system 
 
             if msg.tool_calls:
                 self.logger.on_thought(self.agent_name, msg.content)
+                tool_call_id = msg.tool_calls[0].id
                 tool_call = msg.tool_calls[0].function
                 tool_name = tool_call.name
                 try:
@@ -109,6 +113,7 @@ Your memory is finite. When the context window is almost full (95%), the system 
                     self.messages.append(
                         {
                             "role": "tool",
+                            "tool_call_id": tool_call_id,
                             "name": tool_name,
                             "content": f"Tools updated to: {[tool.name for tool in self.tools]}",
                         }
@@ -119,13 +124,18 @@ Your memory is finite. When the context window is almost full (95%), the system 
                 else:
                     self.logger.on_tool_output(self.agent_name, tool_name, tool_result)
                     self.messages.append(
-                        {"role": "tool", "name": tool_name, "content": tool_result}
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "name": tool_name,
+                            "content": tool_result,
+                        }
                     )
             else:
                 self.logger.info(
                     f"Model want to say something for humans: {msg.content}"
                 )
-                with open("/app/logs/insights.txt", "a") as f:
+                with open("/app/logs/insights.txt", "a", encoding="utf-8") as f:
                     f.write(f"{msg.content}\n{'>'*50}\n")
                 self.messages.append(
                     {
@@ -155,10 +165,34 @@ Your memory is finite. When the context window is almost full (95%), the system 
                 )
 
     def tokens_num(self):
-        converted_messages = [
-            m.model_dump() if isinstance(m, ChatCompletionMessage) else m
-            for m in self.messages
-        ]
-        text = self.tokenizer.apply_chat_template(converted_messages, tokenize=False)
-        inputs = self.tokenizer.tokenize([text])
-        return len(inputs["input_ids"][0]) if inputs["input_ids"] else 0
+        converted_messages = []
+        for m in self.messages:
+            if isinstance(m, ChatCompletionMessage):
+                msg_dict = m.model_dump()
+            else:
+                msg_dict = m.copy()
+
+            if "tool_calls" in msg_dict and msg_dict["tool_calls"]:
+                for tc in msg_dict["tool_calls"]:
+                    func = tc.get("function", {})
+                    args = func.get("arguments")
+
+                    if isinstance(args, str):
+                        try:
+                            func["arguments"] = json.loads(args)
+                        except json.JSONDecodeError:
+                            func["arguments"] = {}
+
+            converted_messages.append(msg_dict)
+
+        try:
+            text = self.tokenizer.apply_chat_template(
+                converted_messages, tokenize=False
+            )
+
+            ids = self.tokenizer.encode(text, add_special_tokens=False)
+            return len(ids)
+
+        except Exception as e:
+            self.logger.on_error(self.agent_name, f"Warning: Tokenization failed: {e}")
+            return 0
