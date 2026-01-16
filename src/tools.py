@@ -24,7 +24,7 @@ __all__ = [
     "create_tool",
     "delete_tools",
     "all_available_tools",
-    "add_tools_to_context",
+    "update_tools_in_context",
     "basetools_to_jsons",
 ]
 
@@ -679,22 +679,28 @@ def all_available_tools_in_registry():
 
 
 @tool(parse_docstring=True)
-def add_tools_to_context(tool_names: list[str]) -> list[BaseTool]:
-    """Load and return tool instances based on their names from the tool registry.
+def update_tools_in_context(tool_names: list[str]) -> list[BaseTool]:
+    """Load tool instances from the registry to expand your current capabilities.
 
-    This function reads the tool registry to find the source paths of the specified
-    tools, dynamically imports them, and returns a list of tool instances that will be added to your context on the next step.
+    This function finds the source code for the requested tools, imports them
+    dynamically, and returns a combined list containing all core base tools
+    and the specific new tools you selected. The resulting list of objects
+    is used to update your active context with both your essential functions
+    and new specialized abilities.
 
     Args:
-        tool_names: A list of tool names to load
+        tool_names: A list of strings with tool names to load. Each name
+            must match an entry in the tool registry. Keep descriptions
+            simple without colons or complex formatting.
 
     Returns:
-        A list of BaseTool instances corresponding to the specified tool names
+        A list of BaseTool objects including both core base tools and the
+        newly selected tools from the registry.
     """
     ALL_BASE_TOOLS = [
         create_tool,
         all_available_tools_in_registry,
-        add_tools_to_context,
+        update_tools_in_context,
         add_to_memory,
         retrieve_from_memory,
         create_note,
@@ -743,7 +749,7 @@ def load_base_tools() -> list[BaseTool]:
     """
     return [
         add_to_memory,
-        add_tools_to_context,
+        update_tools_in_context,
         all_available_tools_in_registry,
         create_note,
         create_tool,
@@ -752,3 +758,6 @@ def load_base_tools() -> list[BaseTool]:
         retrieve_from_memory,
         update_note,
     ]
+
+
+# TODO: Tool to see tool source code by name and tool to change tool source code by name
